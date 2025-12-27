@@ -165,5 +165,46 @@ def run_thesis_evaluation():
         f.write(df_metrics.to_markdown())
     print("Saved risk_table.md")
 
+    # 3. Visual: Policy Decision Surface
+    plot_policy_surface(baseline, ernie, env)
+
+def plot_policy_surface(baseline, ernie, env):
+    """
+    Plots the action probability surface to visually demonstrate smoothness.
+    Varies 'Volume Imbalance' (Index 2) from -1 to 1 and plots P(Buy).
+    """
+    imbalance_range = np.linspace(-1, 1, 100)
+    
+    # Base state: [Mid=100, Spread=0.1, Imbalance=?, RSI=50, MACD=0, Inv=0]
+    base_state = np.array([100.0, 0.1, 0.0, 50.0, 0.0, 0.0], dtype=np.float32)
+    
+    probs_baseline = []
+    probs_ernie = []
+    
+    for val in imbalance_range:
+        s = base_state.copy()
+        s[2] = val # Modify Imbalance
+        state_tensor = torch.FloatTensor(s).unsqueeze(0)
+        
+        with torch.no_grad():
+            p_base = F.softmax(baseline.actor(state_tensor), dim=-1)[0]
+            p_ernie = F.softmax(ernie.actor(state_tensor), dim=-1)[0]
+            
+        # Action 1 = Buy Limit
+        probs_baseline.append(p_base[1].item())
+        probs_ernie.append(p_ernie[1].item())
+        
+    plt.figure(figsize=(10, 6))
+    plt.title("Policy Surface: Response to Volume Imbalance")
+    plt.plot(imbalance_range, probs_baseline, label='Baseline (Jagged)', color='red', alpha=0.6, marker='.', markersize=5)
+    plt.plot(imbalance_range, probs_ernie, label='ERNIE (Smooth)', color='green', linewidth=3)
+    plt.xlabel("Volume Imbalance (Normalized)")
+    plt.ylabel("Probability of Buy Order")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig('thesis_surface.png')
+    print("Saved thesis_surface.png")
+
+
 if __name__ == '__main__':
     run_thesis_evaluation()

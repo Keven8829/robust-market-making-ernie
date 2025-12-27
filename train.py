@@ -15,7 +15,7 @@ def train(args):
         agent = MAPPOAgent(state_dim, action_dim, lr=0.0003, gamma=0.99, k_epochs=5)
     elif args.agent == 'ernie':
         agent = ERNIE_PPO_Agent(state_dim, action_dim, lr=0.0003, gamma=0.99, k_epochs=5,
-                                epsilon=0.05, eta=0.01, vigilance=0.1)
+                                epsilon=0.05, eta=0.01, vigilance=0.5)
     else:
         raise ValueError("Invalid agent type. Use 'baseline' or 'ernie'.")
     

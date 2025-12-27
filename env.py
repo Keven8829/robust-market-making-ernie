@@ -31,14 +31,22 @@ class MarketEnv(gym.Env):
         self.reset()
 
     def _load_data(self, ticker, start, end):
-        data = yf.download(ticker, start=start, end=end, progress=False, interval="1h") # Hourly data for MM simulation
-        if len(data) == 0:
-             # Fallback to a major ticker if Gold fails or just random data for test
-             print(f"Warning: No data found for {ticker}. Generating synthetic data.")
-             dates = pd.date_range(start, end, freq='H')
-             data = pd.DataFrame(index=dates)
-             data['Close'] = 100 + np.random.randn(len(dates)).cumsum()
-             data['Volume'] = np.random.randint(100, 1000, size=len(dates))
+        import os
+        if os.path.exists('gold_data.csv'):
+            data = pd.read_csv('gold_data.csv', index_col=0, parse_dates=True)
+            # Ensure index is datetime
+            data.index = pd.to_datetime(data.index)
+        else:
+            data = yf.download(ticker, start=start, end=end, progress=False, interval="1h")
+            if len(data) == 0:
+                 print(f"Warning: No data found for {ticker}. Generating synthetic data.")
+                 dates = pd.date_range(start, end, freq='h')
+                 data = pd.DataFrame(index=dates)
+                 data['Close'] = 100 + np.random.randn(len(dates)).cumsum()
+                 data['Volume'] = np.random.randint(100, 1000, size=len(dates))
+            else:
+                # Save to CSV for stability
+                data.to_csv('gold_data.csv')
              
         # Feature Engineering
         # RSI
@@ -53,7 +61,7 @@ class MarketEnv(gym.Env):
         exp2 = data['Close'].ewm(span=26, adjust=False).mean()
         data['MACD'] = exp1 - exp2
         
-        # Synthetic Bid/Ask Spread (e.g., 0.01% - 0.05% of price)
+        # Synthetic Bid/Ask Spread
         data['Spread'] = data['Close'] * np.random.uniform(0.0001, 0.0005, size=len(data))
         
         # Synthetic Volume Imbalance (-1 to 1)
@@ -67,21 +75,29 @@ class MarketEnv(gym.Env):
 
     def reset(self, seed=None):
         super().reset(seed=seed)
-        self.current_step = self.window_size # Start after warmup for indicators
+        self.current_step = self.window_size 
         self.inventory = 0
-        self.cash = 10000.0 # Initial Cash
-        self.entry_price = 0 # Weighted average entry price
+        self.cash = 10000.0 
+        self.entry_price = 0 
         self.done = False
+        self.initial_price = self.df.iloc[self.current_step]['Mid'] # Store for normalization
         return self._get_observation(), {}
 
     def _get_observation(self):
         row = self.df.iloc[self.current_step]
+        
+        # Normalization (Crucial for Neural Nets per Gemini advice)
+        norm_price = row['Mid'] / self.initial_price
+        norm_spread = row['Spread'] / self.initial_price
+        norm_rsi = row['RSI'] / 100.0
+        norm_macd = row['MACD'] / self.initial_price
+        
         obs = np.array([
-            row['Mid'],
-            row['Spread'],
-            row['Imbalance'],
-            row['RSI'],
-            row['MACD'],
+            norm_price,
+            norm_spread,
+            row['Imbalance'], # Already -1 to 1
+            norm_rsi,
+            norm_macd,
             self.inventory
         ], dtype=np.float32)
         return obs
