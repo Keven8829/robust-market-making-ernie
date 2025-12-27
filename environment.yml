@@ -1,0 +1,14 @@
+name: aaml_ernie
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - pandas
+  - numpy
+  - pip
+  - pip:
+      - gymnasium
+      - yfinance
+      - matplotlib
