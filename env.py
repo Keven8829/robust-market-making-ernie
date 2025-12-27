@@ -86,19 +86,23 @@ class MarketEnv(gym.Env):
     def _get_observation(self):
         row = self.df.iloc[self.current_step]
         
-        # Normalization (Crucial for Neural Nets per Gemini advice)
-        norm_price = row['Mid'] / self.initial_price
-        norm_spread = row['Spread'] / self.initial_price
+        # Normalization (Improved based on Expert Review)
+        # Relative scaling: (Current / Ref) - 1.0 gives % change centered at 0
+        # Use initial price of the episode as reference
+        ref_price = self.initial_price if self.initial_price > 0 else 1.0
+        
+        norm_price = (row['Mid'] / ref_price) - 1.0
+        norm_spread = row['Spread'] / row['Mid'] # Spread as % of price
         norm_rsi = row['RSI'] / 100.0
-        norm_macd = row['MACD'] / self.initial_price
+        norm_macd = row['MACD'] / ref_price # MACD relative to price scale
         
         obs = np.array([
-            norm_price,
-            norm_spread,
-            row['Imbalance'], # Already -1 to 1
+            norm_price * 10.0,   # Scale up slightly
+            norm_spread * 1000.0, # Scale up small spread
+            row['Imbalance'], 
             norm_rsi,
-            norm_macd,
-            self.inventory
+            norm_macd * 10.0,
+            self.inventory / 10.0 # Normalize inventory (assuming soft limit ~10)
         ], dtype=np.float32)
         return obs
 

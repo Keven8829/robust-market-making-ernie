@@ -7,6 +7,55 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import pandas as pd
 
+def run_regime_shift_test(baseline, ernie):
+    """
+    Evaluates agents on a specific 'Crisis Regime' (e.g., March 2020 Covid Crash).
+    This tests true market robustness beyond sensor noise.
+    """
+    print("\nRunning Regime Shift Test (Covid Crash: March 2020)...")
+    # Initialize env with specific crash dates
+    crash_env = MarketEnv(ticker='GC=F', start_date='2020-03-01', end_date='2020-04-01')
+    
+    state, _ = crash_env.reset()
+    done = False
+    
+    # We need to run same env sequence for both, but reset changes seeds or data? 
+    # MarketEnv loads data in init, so reset just goes to window_size.
+    # We can run baseline then reset then ernie.
+    
+    # Run Baseline
+    rewards_base = []
+    while not done:
+        action, _ = baseline.get_action(state)
+        next_state, reward, done, _, _ = crash_env.step(action)
+        rewards_base.append(reward)
+        state = next_state
+        
+    # Reset for ERNIE
+    state, _ = crash_env.reset()
+    done = False
+    rewards_ernie = []
+    while not done:
+        action, _ = ernie.get_action(state)
+        # Note: ERNIE agent handles same state input
+        next_state, reward, done, _, _ = crash_env.step(action)
+        rewards_ernie.append(reward)
+        state = next_state
+        
+    print(f"Crash Regime Total Reward - Baseline: {sum(rewards_base):.2f}")
+    print(f"Crash Regime Total Reward - ERNIE:    {sum(rewards_ernie):.2f}")
+    
+    # Plot Regime Shift
+    plt.figure(figsize=(10, 6))
+    plt.plot(np.cumsum(rewards_base), label='Baseline (Crash)', color='red', alpha=0.7)
+    plt.plot(np.cumsum(rewards_ernie), label='ERNIE (Crash)', color='green', alpha=0.7)
+    plt.title("Regime Shift Robustness: March 2020 Flash Crash")
+    plt.xlabel("Hours")
+    plt.ylabel("Cumulative PnL")
+    plt.legend()
+    plt.savefig('thesis_regime_shift.png')
+    print("Saved thesis_regime_shift.png")
+
 def estimate_lipschitz_constant(agent, env, num_samples=1000, epsilon=0.01):
     """
     Estimates the local Lipschitz constant of the Agent's policy.
@@ -167,6 +216,9 @@ def run_thesis_evaluation():
 
     # 3. Visual: Policy Decision Surface
     plot_policy_surface(baseline, ernie, env)
+    
+    # 4. Regime Shift Stress Test
+    run_regime_shift_test(baseline, ernie)
 
 def plot_policy_surface(baseline, ernie, env):
     """
